@@ -1,0 +1,62 @@
+# 冲洗 + 冲洗
+这个存储库包含几个执行 **Flush+Flush** 攻击（和相关攻击）的工具。
+
+Flush+Flush 攻击只依赖于flush指令的执行时间，这取决于数据是否被缓存。
+Flush+Flush 不会进行任何内存访问，这与任何其他缓存攻击相反。因此，它根本不会导致缓存未命中，并且
+由于不断的高速缓存刷新，高速缓存命中的数量减少到最低限度。因此，Flush+Flush 攻击是隐蔽的，并且
+比现有的缓存攻击更快。
+
+Gruss、Maurice、Wagner 和 Mangard 的“[Flush+Flush](https://scholar.google.at/citations?view_op=view_citation&hl=de&user=JmCg4uQAAAAJ&citation_for_view=JmCg4uQAAAAJ:l7t_Zn2s7bgC)”论文将在 DIMVA 2016 上发表。
+
+## 开始前的注意事项
+
+**警告：** 此代码按原样提供。您有责任保护您自己、您的财产和数据以及其他人免受此代码引起的任何风险。此代码可能无法检测您的应用程序的漏洞。此代码仅用于测试目的。仅在不包含敏感数据的测试系统上使用它。
+
+这些程序应该可以在具有最新 Linux 的 x86-64 Intel CPU 上运行。请注意，代码包含特定于我们测试系统的硬编码地址和阈值。请根据您的系统调整这些地址和阈值。
+
+## 入门：校准
+使用 histogram 文件夹中的直方图工具，根据不同的技术找到区分缓存命中和缓存未命中的阈值：
+* ff：使用f+f攻击
+* fr: 使用 Flush+Reload 攻击
+* pp：使用 Prime+Probe 攻击（在侧信道场景中）
+* ppc：使用 Prime+Probe 攻击（在隐蔽通道场景中）
+
+这些程序中的每一个都应打印缓存命中和缓存未命中的直方图。根据直方图，您可以选择适当的值来区分缓存命中和缓存未命中。
+
+**注意：** 在大多数程序中，我定义了一个常量 MIN_CACHE_MISS_CYCLES。如有必要，请根据您的阈值进行更改。
+
+## 开始：窃听某事
+您可以使用 sc 文件夹中的不同工具窃听某些内容（例如共享库中的函数调用以推断诸如按键之类的内容）。
+我们假设您已经知道一个合适的地址，例如来自 [缓存模板攻击](https://github.com/IAIK/cache_template_attacks)。
+
+像这样运行间谍：
+```
+cd sc
+cd ff # or fr/pp
+make
+./spy /usr/lib/x86_64-linux-gnu/libgdk-3.so.0.1200.2 0x85ec0 # use a suitable address ;).
+这些工具现在将打印击键的缓存命中。请注意，这些是我们最简单的 ff/fr/pp 间谍工具。
+为了显着降低噪音，您可以在 Flush+Flush 或 Prime+Probe 的情况下监控两个相邻地址。
+
+## OpenSSL AES T 表攻击
+
+### 先决条件
+
+* 此示例需要 OpenSSL 的自编译版本以启用其基于 T-Table 的 AES 实现。
+* 将 `libcrypto.so` 或其符号链接放在 `aes/ff`、`aes/fr` 或 `aes/pp` 中，以便程序使用此共享库。
+* 使用 `$ nm libcrypto.so.1.0.0 | 确定 T 表地址"grep Te[0-4]"` 并在 `spy.cpp` 中更新它们。
+
+＃＃＃ 跑步
+
+然后，运行以下命令：
+
+```
+cd
+cd ff # 或 fr 或 pp
+make
+。/spy
+```
+
+间谍工具触发加密，然后在大约 64 次加密后确定每个密钥字节的高 4 位。
+
+OpenSSL 不再使用基于 T 表的 AES 实现。但是，您可以使用此工具分析任何二进制文件（甚至可能是封闭源代码），以查明它是否包含通过缓存泄漏密钥相关信息的加密算法。
